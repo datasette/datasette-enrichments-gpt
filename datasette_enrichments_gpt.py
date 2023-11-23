@@ -4,8 +4,8 @@ from datasette import hookimpl
 from datasette.database import Database
 import httpx
 from typing import List, Optional
-from wtforms import Form, StringField, TextAreaField
-from wtforms.validators import DataRequired
+from wtforms import Form, StringField, TextAreaField, BooleanField
+from wtforms.validators import ValidationError, DataRequired
 import sqlite_utils
 
 
@@ -32,6 +32,12 @@ class GptEnrichment(Enrichment):
                 "Prompt",
                 description="A template to run against each row to generate a prompt. Use {{ COL }} for columns.",
                 default=default,
+                validators=[DataRequired(message="Prompt is required.")],
+            )
+            json_format = BooleanField(
+                "JSON object",
+                description="Output a valid JSON object {...} instead of plain text",
+                default=False,
             )
             output_column = StringField(
                 "Output column name",
@@ -39,6 +45,12 @@ class GptEnrichment(Enrichment):
                 validators=[DataRequired(message="Column is required.")],
                 default="prompt_output",
             )
+
+            def validate_prompt(self, field):
+                if self.json_format.data and "json" not in field.data.lower():
+                    raise ValidationError(
+                        'The prompt must contain the word "json" when JSON format is selected.'
+                    )
 
         return ConfigForm
 
@@ -67,7 +79,7 @@ class GptEnrichment(Enrichment):
                     "Authorization": "Bearer {}".format(api_key),
                 },
                 json=body,
-                timeout=60.0
+                timeout=60.0,
             )
             response.raise_for_status()
             result = response.json()["choices"][0]["message"]["content"]
@@ -76,12 +88,14 @@ class GptEnrichment(Enrichment):
             # completion_tokens, prompt_tokens
             return result
 
-    async def gpt3_turbo(self, api_key, prompt, system=None) -> str:
+    async def gpt3_turbo(self, api_key, prompt, system=None, json_format=False) -> str:
         messages = []
         if system:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
-        return await self._chat_completion(api_key, "gpt-3.5-turbo-1106", messages)
+        return await self._chat_completion(
+            api_key, "gpt-3.5-turbo-1106", messages, json_format=json_format
+        )
 
     async def enrich_batch(
         self,
@@ -99,16 +113,15 @@ class GptEnrichment(Enrichment):
             row = rows[0]
         else:
             return
-        print(pks)
         prompt = config["prompt"] or ""
+        json_format = bool(config.get("json_format"))
         output_column = config["output_column"]
         for key, value in row.items():
             prompt = prompt.replace("{{ %s }}" % key, str(value or "")).replace(
                 "{{%s}}" % key, str(value or "")
             )
         # Now run the prompt
-        output = await self.gpt3_turbo(api_key, prompt)
-        print([output] + list(row[pk] for pk in pks))
+        output = await self.gpt3_turbo(api_key, prompt, json_format=json_format)
         await db.execute_write(
             "update [{table}] set [{output_column}] = ? where {wheres}".format(
                 table=table,
