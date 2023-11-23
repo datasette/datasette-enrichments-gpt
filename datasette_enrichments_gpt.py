@@ -34,6 +34,11 @@ class GptEnrichment(Enrichment):
                 default=default,
                 validators=[DataRequired(message="Prompt is required.")],
             )
+            system_prompt = TextAreaField(
+                "System prompt",
+                description="Instructions to apply to the main prompt. Can only be a static string, no {{ columns }}",
+                default="",
+            )
             json_format = BooleanField(
                 "JSON object",
                 description="Output a valid JSON object {...} instead of plain text",
@@ -47,9 +52,13 @@ class GptEnrichment(Enrichment):
             )
 
             def validate_prompt(self, field):
-                if self.json_format.data and "json" not in field.data.lower():
+                if (
+                    self.json_format.data
+                    and "json" not in field.data.lower()
+                    and "json" not in self.system_prompt.data.lower()
+                ):
                     raise ValidationError(
-                        'The prompt must contain the word "json" when JSON format is selected.'
+                        'The prompt or system prompt must contain the word "json" when JSON format is selected.'
                     )
 
         return ConfigForm
@@ -114,6 +123,7 @@ class GptEnrichment(Enrichment):
         else:
             return
         prompt = config["prompt"] or ""
+        system = config["system_prompt"] or None
         json_format = bool(config.get("json_format"))
         output_column = config["output_column"]
         for key, value in row.items():
@@ -121,7 +131,7 @@ class GptEnrichment(Enrichment):
                 "{{%s}}" % key, str(value or "")
             )
         # Now run the prompt
-        output = await self.gpt3_turbo(api_key, prompt, json_format=json_format)
+        output = await self.gpt3_turbo(api_key, prompt, system, json_format)
         await db.execute_write(
             "update [{table}] set [{output_column}] = ? where {wheres}".format(
                 table=table,
