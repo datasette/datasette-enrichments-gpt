@@ -4,8 +4,9 @@ from datasette import hookimpl
 from datasette.database import Database
 import httpx
 from typing import List, Optional
-from wtforms import Form, StringField, TextAreaField, BooleanField
+from wtforms import Form, StringField, TextAreaField, BooleanField, PasswordField
 from wtforms.validators import ValidationError, DataRequired
+import secrets
 import sqlite_utils
 
 
@@ -21,7 +22,7 @@ class GptEnrichment(Enrichment):
     runs_in_process = True
     batch_size = 1
 
-    async def get_config_form(self, db, table):
+    async def get_config_form(self, datasette, db, table):
         columns = await db.table_columns(table)
 
         # Default template uses all string columns
@@ -58,10 +59,32 @@ class GptEnrichment(Enrichment):
                     and "json" not in self.system_prompt.data.lower()
                 ):
                     raise ValidationError(
-                        'The prompt or system prompt must contain the word "json" when JSON format is selected.'
+                        'The prompt or system prompt must contain the word "JSON" when JSON format is selected.'
                     )
 
-        return ConfigForm
+        def stash_api_key(form, field):
+            if not (field.data or "").startswith("sk-"):
+                raise ValidationError("API key must start with sk-")
+            if not hasattr(datasette, "_enrichments_gpt_stashed_keys"):
+                datasette._enrichments_gpt_stashed_keys = {}
+            key = secrets.token_urlsafe(16)
+            datasette._enrichments_gpt_stashed_keys[key] = field.data
+            field.data = key
+
+        class ConfigFormWithKey(ConfigForm):
+            api_key = PasswordField(
+                "API key",
+                description="Your OpenAI API key",
+                validators=[
+                    DataRequired(message="API key is required."),
+                    stash_api_key,
+                ],
+            )
+
+        plugin_config = datasette.plugin_config("datasette-enrichments-gpt") or {}
+        api_key = plugin_config.get("api_key")
+
+        return ConfigForm if api_key else ConfigFormWithKey
 
     async def initialize(self, datasette, db, table, config):
         # Ensure column exists
@@ -116,8 +139,8 @@ class GptEnrichment(Enrichment):
         config: dict,
         job_id: int,
     ) -> List[Optional[str]]:
-        plugin_config = datasette.plugin_config("datasette-enrichments-gpt")
-        api_key = plugin_config["api_key"]
+        # API key should be in plugin settings OR pointed to by config
+        api_key = resolve_api_key(datasette, config)
         if rows:
             row = rows[0]
         else:
@@ -140,3 +163,25 @@ class GptEnrichment(Enrichment):
             ),
             [output] + list(row[pk] for pk in pks),
         )
+
+
+class ApiKeyError(Exception):
+    pass
+
+
+def resolve_api_key(datasette, config):
+    plugin_config = datasette.plugin_config("datasette-enrichments-gpt") or {}
+    api_key = plugin_config.get("api_key")
+    if api_key:
+        return api_key
+    # Look for it in config
+    api_key_name = config.get("api_key")
+    if not api_key_name:
+        raise ApiKeyError("No API key reference found in config")
+    # Look it up in the stash
+    if not hasattr(datasette, "_enrichments_gpt_stashed_keys"):
+        raise ApiKeyError("No API key stash found")
+    stashed_keys = datasette._enrichments_gpt_stashed_keys
+    if api_key_name not in stashed_keys:
+        raise ApiKeyError("No API key found in stash for {}".format(api_key_name))
+    return stashed_keys[api_key_name]
