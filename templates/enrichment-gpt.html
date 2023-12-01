@@ -1,0 +1,27 @@
+{% extends "enrichment.html" %}
+
+{% block below_form %}
+<script>
+const modelSelect = document.querySelector('#model');
+const divForImageUrlLabel = document.querySelector('label[for="image_url"]').parentNode;
+const divForImageUrlInput = document.querySelector('#image_url').parentNode;
+const divForJsonFormatLabel = document.querySelector('label[for="json_format"]').parentNode;
+const divForJsonFormatInput = document.querySelector('#json_format').parentNode;
+function handleModelChange() {
+    // If gpt-4-vision-preview, hide JSON, show image URL
+    if (modelSelect.value === 'gpt-4-vision-preview') {
+        divForImageUrlLabel.style.display = '';
+        divForImageUrlInput.style.display = '';
+        divForJsonFormatLabel.style.display = 'none';
+        divForJsonFormatInput.style.display = 'none';
+    } else {
+        divForImageUrlLabel.style.display = 'none';
+        divForImageUrlInput.style.display = 'none';
+        divForJsonFormatLabel.style.display = '';
+        divForJsonFormatInput.style.display = '';
+    }
+}
+modelSelect.addEventListener('change', handleModelChange);
+handleModelChange();
+</script>
+{% endblock %}

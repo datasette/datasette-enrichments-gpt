@@ -4,7 +4,14 @@ from datasette import hookimpl
 from datasette.database import Database
 import httpx
 from typing import List, Optional
-from wtforms import Form, StringField, TextAreaField, BooleanField, PasswordField
+from wtforms import (
+    Form,
+    StringField,
+    TextAreaField,
+    BooleanField,
+    PasswordField,
+    SelectField,
+)
 from wtforms.validators import ValidationError, DataRequired
 import secrets
 import sqlite_utils
@@ -28,12 +35,33 @@ class GptEnrichment(Enrichment):
         # Default template uses all string columns
         default = " ".join("{{ COL }}".replace("COL", col) for col in columns)
 
+        url_columns = [col for col in columns if "url" in col.lower()]
+        image_url_suggestion = ""
+        if url_columns:
+            image_url_suggestion = "{{ %s }}" % url_columns[0]
+
         class ConfigForm(Form):
+            # Select box to pick model from gpt-3.5-turbo or gpt-4-turbo
+            model = SelectField(
+                "Model",
+                choices=[
+                    ("gpt-3.5-turbo", "gpt-3.5-turbo"),
+                    ("gpt-4-1106-preview", "gpt-4-turbo"),
+                    ("gpt-4-vision-preview", "gpt-4-vision"),
+                ],
+                default="gpt-3.5-turbo",
+            )
             prompt = TextAreaField(
                 "Prompt",
                 description="A template to run against each row to generate a prompt. Use {{ COL }} for columns.",
                 default=default,
                 validators=[DataRequired(message="Prompt is required.")],
+                render_kw={"style": "height: 8em"},
+            )
+            image_url = StringField(
+                "Image URL",
+                description="Image URL template. Only used with gpt-4-vision.",
+                default=image_url_suggestion,
             )
             system_prompt = TextAreaField(
                 "System prompt",
@@ -79,6 +107,7 @@ class GptEnrichment(Enrichment):
                     DataRequired(message="API key is required."),
                     stash_api_key,
                 ],
+                render_kw={"autocomplete": "off"},
             )
 
         plugin_config = datasette.plugin_config("datasette-enrichments-gpt") or {}
@@ -103,6 +132,9 @@ class GptEnrichment(Enrichment):
         body = {"model": model, "messages": messages}
         if json_format:
             body["response_format"] = {"type": "json_object"}
+        # Bump up max tokens on gpt-4-vision-preview
+        if model == "gpt-4-vision-preview":
+            body["max_tokens"] = 1000
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 "https://api.openai.com/v1/chat/completions",
@@ -120,14 +152,32 @@ class GptEnrichment(Enrichment):
             # completion_tokens, prompt_tokens
             return result
 
-    async def gpt3_turbo(self, api_key, prompt, system=None, json_format=False) -> str:
+    async def turbo_completion(
+        self, api_key, model, prompt, system=None, json_format=False
+    ) -> str:
         messages = []
         if system:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
         return await self._chat_completion(
-            api_key, "gpt-3.5-turbo-1106", messages, json_format=json_format
+            api_key, model, messages, json_format=json_format
         )
+
+    async def gpt4_vision(self, api_key, prompt, image_url, system=None) -> str:
+        messages = []
+        if system:
+            # TODO: Check that gpt-4-vision-preview supports system prompts
+            messages.append({"role": "system", "content": system})
+        messages.append(
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": image_url}},
+                ],
+            }
+        )
+        return await self._chat_completion(api_key, "gpt-4-vision-preview", messages)
 
     async def enrich_batch(
         self,
@@ -149,12 +199,22 @@ class GptEnrichment(Enrichment):
         system = config["system_prompt"] or None
         json_format = bool(config.get("json_format"))
         output_column = config["output_column"]
+        image_url = config["image_url"]
         for key, value in row.items():
             prompt = prompt.replace("{{ %s }}" % key, str(value or "")).replace(
                 "{{%s}}" % key, str(value or "")
             )
-        # Now run the prompt
-        output = await self.gpt3_turbo(api_key, prompt, system, json_format)
+            if image_url:
+                image_url = image_url.replace(
+                    "{{ %s }}" % key, str(value or "")
+                ).replace("{{%s}}" % key, str(value or ""))
+        model = config["model"]
+        if model == "gpt-4-vision-preview":
+            output = await self.gpt4_vision(api_key, prompt, image_url, system)
+        else:
+            output = await self.turbo_completion(
+                api_key, model, prompt, system, json_format
+            )
         await db.execute_write(
             "update [{table}] set [{output_column}] = ? where {wheres}".format(
                 table=table,
