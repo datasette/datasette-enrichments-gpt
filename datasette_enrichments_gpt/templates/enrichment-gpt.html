@@ -9,7 +9,7 @@ const divForJsonFormatLabel = document.querySelector('label[for="json_format"]')
 const divForJsonFormatInput = document.querySelector('#json_format').parentNode;
 function handleModelChange() {
     // If gpt-4-vision-preview, hide JSON, show image URL
-    if (modelSelect.value === 'gpt-4-vision-preview') {
+    if (modelSelect.value === 'gpt-4-vision') {
         divForImageUrlLabel.style.display = '';
         divForImageUrlInput.style.display = '';
         divForJsonFormatLabel.style.display = 'none';

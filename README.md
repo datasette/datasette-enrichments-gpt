@@ -31,7 +31,9 @@ plugins:
 
 ## Usage
 
-Once installed, this plugin will allow users to select rows to enrich and run them through prompts using `gpt-3.5-turbo`, saving the result of the prompt in the specified column.
+Once installed, this plugin will allow users to select rows to enrich and run them through prompts using `gpt-3.5-turbo` or `gpt-4-turbo`, saving the result of the prompt in the specified column.
+
+The plugin also provides `gpt-4-turbo vision`, which can run prompts against an image identified by a URL.
 
 ## Development
 

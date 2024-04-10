@@ -46,8 +46,8 @@ class GptEnrichment(Enrichment):
                 "Model",
                 choices=[
                     ("gpt-3.5-turbo", "gpt-3.5-turbo"),
-                    ("gpt-4-1106-preview", "gpt-4-turbo"),
-                    ("gpt-4-vision-preview", "gpt-4-vision"),
+                    ("gpt-4-turbo", "gpt-4-turbo"),
+                    ("gpt-4-vision", "gpt-4-turbo vision"),
                 ],
                 default="gpt-3.5-turbo",
             )
@@ -132,9 +132,7 @@ class GptEnrichment(Enrichment):
         body = {"model": model, "messages": messages}
         if json_format:
             body["response_format"] = {"type": "json_object"}
-        # Bump up max tokens on gpt-4-vision-preview
-        if model == "gpt-4-vision-preview":
-            body["max_tokens"] = 1000
+        body["max_tokens"] = 1000
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 "https://api.openai.com/v1/chat/completions",
@@ -166,7 +164,6 @@ class GptEnrichment(Enrichment):
     async def gpt4_vision(self, api_key, prompt, image_url, system=None) -> str:
         messages = []
         if system:
-            # TODO: Check that gpt-4-vision-preview supports system prompts
             messages.append({"role": "system", "content": system})
         messages.append(
             {
@@ -177,7 +174,7 @@ class GptEnrichment(Enrichment):
                 ],
             }
         )
-        return await self._chat_completion(api_key, "gpt-4-vision-preview", messages)
+        return await self._chat_completion(api_key, "gpt-4-turbo", messages)
 
     async def enrich_batch(
         self,
@@ -209,7 +206,7 @@ class GptEnrichment(Enrichment):
                     "{{ %s }}" % key, str(value or "")
                 ).replace("{{%s}}" % key, str(value or ""))
         model = config["model"]
-        if model == "gpt-4-vision-preview":
+        if model == "gpt-4-vision":
             output = await self.gpt4_vision(api_key, prompt, image_url, system)
         else:
             output = await self.turbo_completion(
