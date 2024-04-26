@@ -12,7 +12,8 @@ classifiers=[
 requires-python = ">=3.8"
 dependencies = [
     "datasette-enrichments>=0.2",
-    "sqlite-utils"
+    "sqlite-utils",
+    "tiktoken"
 ]
 
 [project.urls]

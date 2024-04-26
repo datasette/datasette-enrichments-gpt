@@ -1,6 +1,6 @@
 from __future__ import annotations
 from datasette_enrichments import Enrichment
-from datasette import hookimpl
+from datasette import hookimpl, Response
 from datasette.database import Database
 import httpx
 from typing import List, Optional
@@ -15,12 +15,38 @@ from wtforms import (
 from wtforms.validators import ValidationError, DataRequired
 import secrets
 import sqlite_utils
-
+import threading
+import tiktoken
 
 @hookimpl
 def register_enrichments():
     return [GptEnrichment()]
 
+@hookimpl
+def register_routes():
+    return [
+        (r"^/-/enrichments-gpt/estimate$", estimate_endpoint),
+    ]
+
+async def estimate_endpoint(request):
+    post_form_data = await request.post_vars()
+    template = post_form_data["template"]
+    system_prompt = post_form_data["system_prompt"]
+    filter_querystring = post_form_data["filter_querystring"]
+    model = post_form_data["model"]
+
+    # Placeholder for actual token estimation logic
+    estimated_tokens = await estimate_tokens(template, system_prompt, filter_querystring, model)
+
+    return Response.json({"estimated_tokens": estimated_tokens})
+
+async def estimate_tokens(template, system_prompt, filter_querystring, model):
+    # This function should implement the actual token estimation logic
+    # For now, it returns a dummy value
+    text = template + system_prompt + filter_querystring
+    encoding = tiktoken.encoding_for_model(model)
+    token_count = len(encoding.encode(text))
+    return token_count
 
 class GptEnrichment(Enrichment):
     name = "AI analysis with OpenAI GPT"
