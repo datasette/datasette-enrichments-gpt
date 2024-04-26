@@ -23,5 +23,28 @@ function handleModelChange() {
 }
 modelSelect.addEventListener('change', handleModelChange);
 handleModelChange();
+
+// Add "Estimate cost" button to the form
+const estimateButton = document.createElement('button');
+estimateButton.type = 'button';
+estimateButton.textContent = 'Estimate cost';
+estimateButton.id = 'estimate-cost';
+document.querySelector('form').appendChild(estimateButton);
+
+// Display area for estimated cost
+const estimateDisplay = document.createElement('div');
+estimateDisplay.id = 'estimate-display';
+document.querySelector('form').appendChild(estimateDisplay);
+
+// Implement JavaScript to handle button click and fetch API endpoint
+estimateButton.addEventListener('click', async () => {
+    const formData = new FormData(document.querySelector('form'));
+    const response = await fetch('/-/enrichments-gpt/estimate', {
+        method: 'POST',
+        body: formData
+    });
+    const data = await response.json();
+    estimateDisplay.textContent = `Estimated cost: ${data.estimated_tokens} tokens`;
+});
 </script>
 {% endblock %}
