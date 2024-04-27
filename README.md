@@ -15,19 +15,13 @@ datasette install datasette-enrichments-gpt
 ```
 ## Configuration
 
-This plugin needs an OpenAI API key. Configure that in `metadata.yml` like so
-```yaml
-plugins:
-  datasette-enrichments-gpt:
-    api_key: sk-..
+This plugin can optionally be configured with an [OpenAI API key](https://platform.openai.com/api-keys). You can set this as an environment variable:
+```bash
+export DATASETTE_SECRETS_OPENAPI_API_KEY=sk-..
 ```
-Or to avoid that key being visible on `/-/metadata` set it as an environment variable and use this:
-```yaml
-plugins:
-  datasette-enrichments-gpt:
-    api_key:
-      $env: OPENAI_API_KEY
-```
+Or you can configure it using the [datasette-secrets](https://datasette.io/plugins/datasette-secrets) plugin.
+
+If you do not configure an OpenAI API key users will be asked to enter one any time they execute the enrichment. The key they provide will not be stored anywhere other than in-memory during the enrichment run.
 
 ## Usage
 
