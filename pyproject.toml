@@ -25,7 +25,7 @@ CI = "https://github.com/datasette/datasette-enrichments-gpt/actions"
 enrichments_gpt = "datasette_enrichments_gpt"
 
 [project.optional-dependencies]
-test = ["pytest", "pytest-asyncio"]
+test = ["datasette-test", "pytest", "pytest-asyncio", "pytest-recording"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "strict"
