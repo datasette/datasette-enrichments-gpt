@@ -37,6 +37,7 @@ async def test_enrichments_gpt(monkeypatch):
     assert response2.status_code == 302
     job_id = response2.headers["location"].split("=")[-1]
     # Wait for it to finish
+    await asyncio.sleep(0.1)
     await wait_for_job(ds, job_id, "test", timeout=10)
     # Should have no errors
     errors = [
