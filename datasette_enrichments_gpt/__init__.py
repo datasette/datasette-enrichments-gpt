@@ -46,13 +46,12 @@ class GptEnrichment(Enrichment):
             image_url_suggestion = "{{ %s }}" % url_columns[0]
 
         class ConfigForm(Form):
-            # Select box to pick model from gpt-3.5-turbo or gpt-4-turbo
             model = SelectField(
                 "Model",
                 choices=[
                     ("gpt-3.5-turbo", "gpt-3.5-turbo"),
-                    ("gpt-4-turbo", "gpt-4-turbo"),
-                    ("gpt-4-vision", "gpt-4-turbo vision"),
+                    ("gpt-4o", "gpt-4o"),
+                    ("gpt-4o-vision", "gpt-4o vision"),
                 ],
                 default="gpt-3.5-turbo",
             )
@@ -65,7 +64,7 @@ class GptEnrichment(Enrichment):
             )
             image_url = StringField(
                 "Image URL",
-                description="Image URL template. Only used with gpt-4-vision.",
+                description="Image URL template. Only used with gpt-4o-vision.",
                 default=image_url_suggestion,
             )
             system_prompt = TextAreaField(
@@ -156,7 +155,7 @@ class GptEnrichment(Enrichment):
                 ],
             }
         )
-        return await self._chat_completion(api_key, "gpt-4-turbo", messages)
+        return await self._chat_completion(api_key, "gpt-4o", messages)
 
     async def enrich_batch(
         self,
@@ -188,7 +187,7 @@ class GptEnrichment(Enrichment):
                     "{{ %s }}" % key, str(value or "")
                 ).replace("{{%s}}" % key, str(value or ""))
         model = config["model"]
-        if model == "gpt-4-vision":
+        if model == "gpt-4o-vision":
             output = await self.gpt4_vision(api_key, prompt, image_url, system)
         else:
             output = await self.turbo_completion(
