@@ -1,3 +1,4 @@
+import asyncio
 from datasette.app import Datasette
 from datasette_test import actor_cookie
 from datasette_enrichments.utils import wait_for_job
